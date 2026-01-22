@@ -1,0 +1,758 @@
+// Prisma Schema for Nexa Flow ERP
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+  // 默认值：如果环境变量不存在，使用默认路径
+}
+
+// ==================== 系统管理 ====================
+
+// 用户表
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  nickname  String
+  avatar    String?
+  email     String?
+  phone     String?
+  status    String   @default("active") // active, inactive
+  roleId    String?
+  role      Role?    @relation(fields: [roleId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联关系
+  operationLogs OperationLog[]
+  salesOrders   SalesOrder[]
+  purchaseOrders PurchaseOrder[]
+
+  @@index([username])
+  @@index([status])
+}
+
+// 角色表
+model Role {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关联关系
+  users       User[]
+  permissions RolePermission[]
+
+  @@index([code])
+}
+
+// 权限表
+model Permission {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  type      String   // menu, button, api
+  path      String?
+  parentId  String?
+  parent    Permission? @relation("PermissionHierarchy", fields: [parentId], references: [id])
+  children  Permission[] @relation("PermissionHierarchy")
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联关系
+  roles     RolePermission[]
+
+  @@index([code])
+  @@index([type])
+}
+
+// 角色权限关联表
+model RolePermission {
+  id           String   @id @default(uuid())
+  roleId       String
+  permissionId String
+  role         Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+// 字典类型表
+model DictType {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  status      String   @default("active") // active, inactive
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关联关系
+  dicts       Dict[]
+
+  @@index([code])
+}
+
+// 字典表
+model Dict {
+  id        String   @id @default(uuid())
+  typeId    String
+  type      DictType @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  code      String
+  label     String
+  value     String
+  sort      Int      @default(0)
+  status    String   @default("active") // active, inactive
+  remark    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([typeId, code])
+  @@index([typeId])
+  @@index([code])
+}
+
+// 操作日志表
+model OperationLog {
+  id             String   @id @default(uuid())
+  operatorId     String
+  operator       User     @relation(fields: [operatorId], references: [id])
+  operationType  String   // create, update, delete, query, login, logout, export, import, other
+  module         String   // 模块名称
+  targetId       String?
+  targetName     String?
+  operationContent String
+  ipAddress      String
+  userAgent      String?
+  status         String   // success, failure
+  errorMessage   String?
+  duration       Int?     // 操作耗时（毫秒）
+  createdAt      DateTime @default(now())
+
+  @@index([operatorId])
+  @@index([module])
+  @@index([operationType])
+  @@index([createdAt])
+}
+
+// ==================== 基础数据 ====================
+
+// 产品表
+model Product {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  name         String
+  specification String?
+  unit         String
+  price        Float    @default(0)
+  minStock     Float    @default(0)
+  maxStock     Float    @default(0)
+  safetyStock  Float    @default(0)
+  status       String   @default("active") // active, inactive
+  remark       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 关联关系
+  salesOrderItems     SalesOrderItem[]
+  purchaseOrderItems  PurchaseOrderItem[]
+  returnOrderItems    ReturnOrderItem[]
+  purchaseReturnItems PurchaseReturnItem[]
+  inventory           Inventory[]
+  stockInItems        StockInItem[]
+  stockOutItems       StockOutItem[]
+  stockCheckItems     StockCheckItem[]
+  stockTransferItems  StockTransferItem[]
+
+  @@index([code])
+  @@index([name])
+  @@index([status])
+}
+
+// 仓库表
+model Warehouse {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  address   String
+  manager   String
+  phone     String
+  status    String   @default("active") // active, inactive
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联关系
+  inventory      Inventory[]
+  stockIns       StockIn[]
+  stockOuts      StockOut[]
+  stockChecks    StockCheck[]
+  stockTransfersFrom StockTransfer[] @relation("StockTransferFrom")
+  stockTransfersTo   StockTransfer[] @relation("StockTransferTo")
+
+  @@index([code])
+  @@index([status])
+}
+
+// ==================== 销售管理 ====================
+
+// 客户表
+model Customer {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  level       String   // A, B, C, D
+  phone       String
+  email       String?
+  address     String?
+  creditLimit Float    @default(0)
+  status      String   @default("active") // active, inactive
+  remark      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关联关系
+  contacts           CustomerContact[]
+  salesOrders        SalesOrder[]
+  returnOrders       ReturnOrder[]
+  accountsReceivable AccountsReceivable[]
+
+  @@index([code])
+  @@index([name])
+  @@index([status])
+}
+
+// 客户联系人表
+model CustomerContact {
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name       String
+  position   String?
+  phone      String
+  email      String?
+  isPrimary  Boolean  @default(false)
+  remark     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([customerId])
+}
+
+// 销售订单表
+model SalesOrder {
+  id            String   @id @default(uuid())
+  orderNo       String   @unique
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  orderDate     DateTime
+  status        String   @default("draft") // draft, pending, approved, shipped, completed, cancelled
+  totalAmount   Float    @default(0)
+  discountAmount Float   @default(0)
+  finalAmount   Float    @default(0)
+  remark        String?
+  createById    String
+  createBy      User     @relation(fields: [createById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联关系
+  items             SalesOrderItem[]
+  returnOrders      ReturnOrder[]
+  accountsReceivable AccountsReceivable?
+
+  @@index([orderNo])
+  @@index([customerId])
+  @@index([status])
+  @@index([orderDate])
+}
+
+// 销售订单明细表
+model SalesOrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Float
+  unitPrice Float
+  discount  Float    @default(0)
+  amount    Float
+  remark    String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// 退货订单表
+model ReturnOrder {
+  id            String   @id @default(uuid())
+  returnNo      String   @unique
+  originalOrderId String
+  originalOrder SalesOrder @relation(fields: [originalOrderId], references: [id])
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  returnDate    DateTime
+  status        String   @default("pending") // pending, approved, rejected, completed
+  totalAmount   Float    @default(0)
+  reason        String
+  remark        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联关系
+  items ReturnOrderItem[]
+
+  @@index([returnNo])
+  @@index([customerId])
+  @@index([status])
+}
+
+// 退货订单明细表
+model ReturnOrderItem {
+  id        String   @id @default(uuid())
+  returnId  String
+  return    ReturnOrder @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderItemId String
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Float
+  unitPrice Float
+  amount    Float
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([returnId])
+  @@index([productId])
+}
+
+// ==================== 采购管理 ====================
+
+// 供应商表
+model Supplier {
+  id                String   @id @default(uuid())
+  code              String   @unique
+  name              String
+  creditRating      String   // AAA, AA, A, B, C, D
+  contactPerson     String
+  phone             String
+  email             String?
+  address           String?
+  taxNumber         String?
+  bankAccount       String?
+  bankName          String?
+  status            String   @default("active") // active, inactive
+  remark            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // 关联关系
+  purchaseOrders    PurchaseOrder[]
+  purchaseReturns   PurchaseReturn[]
+  accountsPayable   AccountsPayable[]
+
+  @@index([code])
+  @@index([name])
+  @@index([status])
+}
+
+// 采购订单表
+model PurchaseOrder {
+  id            String   @id @default(uuid())
+  orderNo       String   @unique
+  supplierId    String
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  applyDate     DateTime
+  status        String   @default("draft") // draft, pending, approved, purchased, received, completed, cancelled
+  totalAmount   Float    @default(0)
+  currency      String   @default("CNY")
+  contractNo    String?
+  contractFile  String?
+  remark        String?
+  createById    String
+  createBy      User     @relation(fields: [createById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联关系
+  items           PurchaseOrderItem[]
+  purchaseReturns PurchaseReturn[]
+  accountsPayable AccountsPayable?
+
+  @@index([orderNo])
+  @@index([supplierId])
+  @@index([status])
+  @@index([applyDate])
+}
+
+// 采购订单明细表
+model PurchaseOrderItem {
+  id           String   @id @default(uuid())
+  orderId      String
+  order        PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  quantity     Float
+  unit         String
+  unitPrice    Float
+  amount       Float
+  remark       String?
+  createdAt    DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// 采购退货表
+model PurchaseReturn {
+  id            String   @id @default(uuid())
+  returnNo      String   @unique
+  originalOrderId String
+  originalOrder PurchaseOrder @relation(fields: [originalOrderId], references: [id])
+  supplierId    String
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  returnDate    DateTime
+  status        String   @default("pending") // pending, approved, rejected, completed
+  totalAmount   Float    @default(0)
+  reason        String
+  remark        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联关系
+  items PurchaseReturnItem[]
+
+  @@index([returnNo])
+  @@index([supplierId])
+  @@index([status])
+}
+
+// 采购退货明细表
+model PurchaseReturnItem {
+  id        String   @id @default(uuid())
+  returnId  String
+  return    PurchaseReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderItemId String
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Float
+  unitPrice Float
+  amount    Float
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([returnId])
+  @@index([productId])
+}
+
+// ==================== 库存管理 ====================
+
+// 库存表
+model Inventory {
+  id              String   @id @default(uuid())
+  warehouseId     String
+  warehouse       Warehouse @relation(fields: [warehouseId], references: [id])
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id])
+  quantity        Float    @default(0)
+  availableQuantity Float  @default(0)
+  reservedQuantity Float   @default(0)
+  location        String?
+  updatedAt       DateTime @updatedAt
+
+  @@unique([warehouseId, productId])
+  @@index([warehouseId])
+  @@index([productId])
+}
+
+// 入库单表
+model StockIn {
+  id            String   @id @default(uuid())
+  inNo          String   @unique
+  warehouseId   String
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+  type          String   // purchase, transfer, adjustment, return
+  relatedOrderId String?
+  relatedOrderNo String?
+  inDate        DateTime
+  operator      String
+  status        String   @default("draft") // draft, completed, cancelled
+  remark        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联关系
+  items StockInItem[]
+
+  @@index([inNo])
+  @@index([warehouseId])
+  @@index([status])
+  @@index([inDate])
+}
+
+// 入库单明细表
+model StockInItem {
+  id        String   @id @default(uuid())
+  inId      String
+  in        StockIn  @relation(fields: [inId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Float
+  location  String?
+  batchNo   String?
+  remark    String?
+  createdAt DateTime @default(now())
+
+  @@index([inId])
+  @@index([productId])
+}
+
+// 出库单表
+model StockOut {
+  id            String   @id @default(uuid())
+  outNo         String   @unique
+  warehouseId   String
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+  type          String   // sales, transfer, adjustment, scrap
+  relatedOrderId String?
+  relatedOrderNo String?
+  outDate       DateTime
+  operator      String
+  status        String   @default("draft") // draft, completed, cancelled
+  remark        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联关系
+  items StockOutItem[]
+
+  @@index([outNo])
+  @@index([warehouseId])
+  @@index([status])
+  @@index([outDate])
+}
+
+// 出库单明细表
+model StockOutItem {
+  id        String   @id @default(uuid())
+  outId     String
+  out       StockOut @relation(fields: [outId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Float
+  location  String?
+  batchNo   String?
+  remark    String?
+  createdAt DateTime @default(now())
+
+  @@index([outId])
+  @@index([productId])
+}
+
+// 盘点单表
+model StockCheck {
+  id            String   @id @default(uuid())
+  checkNo       String   @unique
+  warehouseId   String
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+  checkDate     DateTime
+  checker       String
+  status        String   @default("draft") // draft, in_progress, completed, cancelled
+  totalItems    Int      @default(0)
+  differenceItems Int    @default(0)
+  remark        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联关系
+  items StockCheckItem[]
+
+  @@index([checkNo])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+// 盘点单明细表
+model StockCheckItem {
+  id            String   @id @default(uuid())
+  checkId       String
+  check         StockCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  bookQuantity  Float
+  actualQuantity Float
+  difference    Float
+  location      String?
+  reason        String?
+  createdAt     DateTime @default(now())
+
+  @@index([checkId])
+  @@index([productId])
+}
+
+// 调拨单表
+model StockTransfer {
+  id            String   @id @default(uuid())
+  transferNo    String   @unique
+  fromWarehouseId String
+  fromWarehouse Warehouse @relation("StockTransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouseId String
+  toWarehouse   Warehouse @relation("StockTransferTo", fields: [toWarehouseId], references: [id])
+  transferDate  DateTime
+  operator      String
+  status        String   @default("draft") // draft, in_transit, completed, cancelled
+  remark        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联关系
+  items StockTransferItem[]
+
+  @@index([transferNo])
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([status])
+}
+
+// 调拨单明细表
+model StockTransferItem {
+  id            String   @id @default(uuid())
+  transferId    String
+  transfer      StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  quantity      Float
+  fromLocation  String?
+  toLocation    String?
+  batchNo       String?
+  remark        String?
+  createdAt     DateTime @default(now())
+
+  @@index([transferId])
+  @@index([productId])
+}
+
+// ==================== 财务管理 ====================
+
+// 应收账款表
+model AccountsReceivable {
+  id            String   @id @default(uuid())
+  billNo        String   @unique
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  orderId       String   @unique
+  order         SalesOrder @relation(fields: [orderId], references: [id])
+  billDate      DateTime
+  totalAmount   Float
+  receivedAmount Float   @default(0)
+  remainingAmount Float
+  dueDate       DateTime
+  status        String   // unpaid, partial, paid, overdue
+  remark        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联关系
+  receiptRecords ReceiptRecord[]
+
+  @@index([billNo])
+  @@index([customerId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+// 收款记录表
+model ReceiptRecord {
+  id            String   @id @default(uuid())
+  receiptNo     String   @unique
+  billId        String
+  bill          AccountsReceivable @relation(fields: [billId], references: [id], onDelete: Cascade)
+  receiptDate   DateTime
+  receiptAmount Float
+  receiptMethod String   // cash, bank_transfer, check, other
+  bankAccount   String?
+  voucherNo     String?
+  operator      String
+  remark        String?
+  createdAt     DateTime @default(now())
+
+  @@index([receiptNo])
+  @@index([billId])
+}
+
+// 应付账款表
+model AccountsPayable {
+  id            String   @id @default(uuid())
+  billNo        String   @unique
+  supplierId    String
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  orderId       String   @unique
+  order         PurchaseOrder @relation(fields: [orderId], references: [id])
+  billDate      DateTime
+  totalAmount   Float
+  paidAmount    Float    @default(0)
+  remainingAmount Float
+  dueDate       DateTime
+  status        String   // unpaid, partial, paid, overdue
+  remark        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联关系
+  paymentRecords PaymentRecord[]
+
+  @@index([billNo])
+  @@index([supplierId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+// 付款记录表
+model PaymentRecord {
+  id            String   @id @default(uuid())
+  paymentNo     String   @unique
+  billId        String
+  bill          AccountsPayable @relation(fields: [billId], references: [id], onDelete: Cascade)
+  paymentDate   DateTime
+  paymentAmount Float
+  paymentMethod String   // cash, bank_transfer, check, other
+  bankAccount   String?
+  voucherNo     String?
+  operator      String
+  remark        String?
+  createdAt     DateTime @default(now())
+
+  @@index([paymentNo])
+  @@index([billId])
+}
+
+// 收支明细表
+model IncomeExpense {
+  id            String   @id @default(uuid())
+  recordNo      String   @unique
+  type          String   // income, expense
+  category      String
+  amount        Float
+  recordDate    DateTime
+  relatedOrderId String?
+  relatedOrderNo String?
+  description   String
+  operator      String
+  createdAt     DateTime @default(now())
+
+  @@index([recordNo])
+  @@index([type])
+  @@index([category])
+  @@index([recordDate])
+}
+
