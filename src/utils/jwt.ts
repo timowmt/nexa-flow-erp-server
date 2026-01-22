@@ -2,7 +2,7 @@
  * JWT 工具函数
  */
 
-import jwt from 'jsonwebtoken';
+import jwt, { type Secret, type SignOptions } from 'jsonwebtoken';
 import type { JwtPayload } from '../types/index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -12,9 +12,11 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
  * 生成 Token
  */
 export function generateToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
-  });
+  return jwt.sign(
+    payload as object,
+    JWT_SECRET as Secret,
+    { expiresIn: JWT_EXPIRES_IN } as SignOptions
+  );
 }
 
 /**

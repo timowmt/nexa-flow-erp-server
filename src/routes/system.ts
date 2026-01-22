@@ -191,7 +191,7 @@ router.post('/users', async (req: AuthRequest, res: Response) => {
         username: data.username,
         password: hashedPassword,
         nickname: data.nickname,
-        email: data.email,
+        email: data.email as string | null | undefined,
         phone: data.phone,
         roleId: data.roleId,
         status: data.status,

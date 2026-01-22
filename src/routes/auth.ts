@@ -52,7 +52,7 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
         username,
         password: hashedPassword,
         nickname,
-        email,
+        email: email as string | null | undefined,
         phone,
         roleId: userRole.id,
         status: 'active',

@@ -285,16 +285,18 @@ export class ReturnOrderService extends BaseService {
       return prisma.$transaction(async (tx) => {
         // 删除旧明细
         await tx.returnOrderItem.deleteMany({
-          where: { returnOrderId: id },
+          where: { returnOrderId: id } as any,
         });
 
         // 更新退货单
+        const items = data.items!;
+
         const updatedOrder = await tx.returnOrder.update({
           where: { id },
           data: {
             ...updateData,
             items: {
-              create: data.items.map((item) => ({
+              create: items.map((item) => ({
                 orderItemId: item.orderItemId,
                 productId: item.productId,
                 quantity: item.quantity,

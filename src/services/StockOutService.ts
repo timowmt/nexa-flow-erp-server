@@ -277,7 +277,7 @@ export class StockOutService extends BaseService {
       // 如果更新明细，先删除旧明细
       if (data.items) {
         await tx.stockOutItem.deleteMany({
-          where: { stockOutId: id },
+          where: { stockOutId: id } as any,
         });
       }
 

@@ -45,18 +45,19 @@ export const registerSchema = z.object({
 
 /**
  * 验证请求体
+ * 为了兼容各种复杂的 Zod Schema（包括 transform、preprocess 等），
+ * 这里在类型上尽量放宽约束，避免影响运行时逻辑。
  */
-export function validateBody<T>(schema: z.ZodSchema<T>) {
+export function validateBody<T = any>(schema: z.ZodTypeAny) {
   return (data: unknown): T => {
     try {
-      return schema.parse(data);
+      return schema.parse(data) as T;
     } catch (error) {
       if (error instanceof z.ZodError) {
         // 提取第一个错误消息，更友好
         const firstError = error.errors[0];
-        const fieldName = firstError.path.length > 0 
-          ? firstError.path.join('.') 
-          : 'unknown';
+        const fieldName =
+          firstError.path.length > 0 ? firstError.path.join('.') : 'unknown';
         throw new Error(`${fieldName}: ${firstError.message}`);
       }
       throw error;
@@ -67,7 +68,7 @@ export function validateBody<T>(schema: z.ZodSchema<T>) {
 /**
  * 验证查询参数
  */
-export function validateQuery<T>(schema: z.ZodSchema<T>) {
+export function validateQuery<T = any>(schema: z.ZodTypeAny) {
   return (query: unknown): T => {
     try {
       return schema.parse(query);
@@ -85,7 +86,7 @@ export function validateQuery<T>(schema: z.ZodSchema<T>) {
 /**
  * 验证路径参数
  */
-export function validateParams<T>(schema: z.ZodSchema<T>) {
+export function validateParams<T = any>(schema: z.ZodTypeAny) {
   return (params: unknown): T => {
     try {
       return schema.parse(params);
