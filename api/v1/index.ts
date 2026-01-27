@@ -26,6 +26,15 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Root / health check (so opening backend domain isn't Vercel 404)
+app.get('/', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'nexa-flow-erp-server',
+    message: 'Backend is running. Use /api/* endpoints.',
+  });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -59,6 +68,19 @@ app.use('/purchase', purchaseRoutes);
 app.use('/inventory', inventoryRoutes);
 app.use('/finance', financeRoutes);
 app.use('/report', reportRoutes);
+
+// Also mount under /api/* for Vercel rewrites/proxies
+app.use('/api/auth', authRoutes);
+app.use('/api/user', authRoutes);
+app.use('/api/system', systemRoutes);
+app.use('/api/sales', salesRoutes);
+app.use('/api/purchase', purchaseRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/finance', financeRoutes);
+app.use('/api/report', reportRoutes);
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
 
 // Error handling
 app.use(notFoundHandler);

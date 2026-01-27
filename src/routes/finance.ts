@@ -173,6 +173,67 @@ router.post('/receivables', async (req: AuthRequest, res: Response) => {
 
 // ==================== 收款记录 ====================
 
+/**
+ * GET /finance/receipts
+ * 获取收款记录列表（收款核销）
+ */
+router.get('/receipts', async (req: AuthRequest, res: Response) => {
+  try {
+    const { page = 1, pageSize = 10, receiptNo, billNo } = validateQuery(
+      paginationSchema.extend({
+        receiptNo: z.string().optional(),
+        billNo: z.string().optional(),
+      })
+    )(req.query);
+
+    const where: any = {};
+    if (receiptNo && String(receiptNo).trim()) {
+      where.receiptNo = { contains: String(receiptNo).trim() };
+    }
+    if (billNo && String(billNo).trim()) {
+      where.bill = { billNo: { contains: String(billNo).trim() } };
+    }
+
+    const [records, total] = await Promise.all([
+      prisma.receiptRecord.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          bill: {
+            select: {
+              id: true,
+              billNo: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.receiptRecord.count({ where }),
+    ]);
+
+    const receipts = records.map((r) => ({
+      id: r.id,
+      receiptNo: r.receiptNo,
+      billId: r.billId,
+      billNo: r.bill.billNo,
+      receiptDate: r.receiptDate.toISOString().split('T')[0],
+      receiptAmount: r.receiptAmount,
+      receiptMethod: r.receiptMethod,
+      bankAccount: r.bankAccount,
+      voucherNo: r.voucherNo,
+      operator: r.operator,
+      remark: r.remark,
+      createTime: r.createdAt.toISOString(),
+    }));
+
+    pagination(res, receipts, total, page, pageSize);
+  } catch (err) {
+    console.error('Get receipts error:', err);
+    error(res, err instanceof Error ? err.message : '获取收款记录列表失败', 500);
+  }
+});
+
 const receiptRecordSchema = z.object({
   billId: z.string().uuid(),
   receiptDate: z.string().transform((str) => new Date(str)),
@@ -454,6 +515,71 @@ const incomeExpenseSchema = z.object({
   relatedOrderId: z.string().uuid().optional(),
   relatedOrderNo: z.string().optional(),
   description: z.string().min(1, '描述不能为空'),
+});
+
+/**
+ * GET /finance/income-expenses/summary
+ * 获取收支明细统计（总收入/总支出/净收入/笔数）
+ */
+router.get('/income-expenses/summary', async (req: AuthRequest, res: Response) => {
+  try {
+    const { type, category, startDate, endDate } = validateQuery(
+      z.object({
+        type: z.string().optional(),
+        category: z.string().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      })
+    )(req.query);
+
+    const where: any = {};
+    if (type) {
+      where.type = type;
+    }
+    if (category) {
+      where.category = category;
+    }
+    if (startDate || endDate) {
+      where.recordDate = {};
+      if (startDate) {
+        where.recordDate.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.recordDate.lte = new Date(endDate);
+      }
+    }
+
+    const grouped = await prisma.incomeExpense.groupBy({
+      by: ['type'],
+      where,
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
+
+    const incomeRow = grouped.find((g) => g.type === 'income');
+    const expenseRow = grouped.find((g) => g.type === 'expense');
+
+    const totalIncome = Number(incomeRow?._sum?.amount ?? 0);
+    const totalExpense = Number(expenseRow?._sum?.amount ?? 0);
+    const incomeCount = Number(incomeRow?._count?._all ?? 0);
+    const expenseCount = Number(expenseRow?._count?._all ?? 0);
+
+    success(
+      res,
+      {
+        totalIncome,
+        totalExpense,
+        netAmount: totalIncome - totalExpense,
+        incomeCount,
+        expenseCount,
+        transactionCount: incomeCount + expenseCount,
+      },
+      '获取收支统计成功'
+    );
+  } catch (err) {
+    console.error('Get income expenses summary error:', err);
+    error(res, err instanceof Error ? err.message : '获取收支统计失败', 500);
+  }
 });
 
 /**
