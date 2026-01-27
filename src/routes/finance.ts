@@ -423,6 +423,67 @@ const paymentRecordSchema = z.object({
 });
 
 /**
+ * GET /finance/payments
+ * 获取付款记录列表（付款核销）
+ */
+router.get('/payments', async (req: AuthRequest, res: Response) => {
+  try {
+    const { page = 1, pageSize = 10, paymentNo, billNo } = validateQuery(
+      paginationSchema.extend({
+        paymentNo: z.string().optional(),
+        billNo: z.string().optional(),
+      })
+    )(req.query);
+
+    const where: any = {};
+    if (paymentNo && String(paymentNo).trim()) {
+      where.paymentNo = { contains: String(paymentNo).trim() };
+    }
+    if (billNo && String(billNo).trim()) {
+      where.bill = { billNo: { contains: String(billNo).trim() } };
+    }
+
+    const [records, total] = await Promise.all([
+      prisma.paymentRecord.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          bill: {
+            select: {
+              id: true,
+              billNo: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.paymentRecord.count({ where }),
+    ]);
+
+    const payments = records.map((p) => ({
+      id: p.id,
+      paymentNo: p.paymentNo,
+      billId: p.billId,
+      billNo: p.bill.billNo,
+      paymentDate: p.paymentDate.toISOString().split('T')[0],
+      paymentAmount: p.paymentAmount,
+      paymentMethod: p.paymentMethod,
+      bankAccount: p.bankAccount,
+      voucherNo: p.voucherNo,
+      operator: p.operator,
+      remark: p.remark,
+      createTime: p.createdAt.toISOString(),
+    }));
+
+    pagination(res, payments, total, page, pageSize);
+  } catch (err) {
+    console.error('Get payments error:', err);
+    error(res, err instanceof Error ? err.message : '获取付款记录列表失败', 500);
+  }
+});
+
+/**
  * POST /finance/payments
  * 创建付款记录
  */
