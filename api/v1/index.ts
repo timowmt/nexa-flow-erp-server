@@ -86,6 +86,6 @@ app.get('/api/health', (req, res) => {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Export for Vercel
+// Export for Vercel Serverless Function
 export default app;
 

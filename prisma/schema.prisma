@@ -5,9 +5,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
-  // 默认值：如果环境变量不存在，使用默认路径
 }
 
 // ==================== 系统管理 ====================
